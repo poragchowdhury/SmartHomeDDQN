@@ -29,7 +29,7 @@ def learning_rate(): #Alpha
     return 0.001
 
 def batch_size():
-    return 60
+    return 100
 
 #%%
 
@@ -154,7 +154,10 @@ for e in range(EPISODES):
     state = np.reshape(state, [1, nS]) # Resize to store in memory to pass to .predict
     tot_rewards = 0
     for time in range(shm.HORIZON): #200 is when you "solve" the game. This can continue forever as far as I know
+        #start1 = datetime.datetime.now()
         action = dqn.action(state)
+        #end1 = datetime.datetime.now()
+        #print("predict time by net {}".format(end1-start1))
         nstate, reward, done, _ = shm.step(action) # use the model to get to the next state & reward
         nstate = np.reshape(nstate, [1, nS])
         tot_rewards += reward
@@ -168,9 +171,12 @@ for e in range(EPISODES):
             print("episode: {}/{}, score: {}, e: {}"
                   .format(e, EPISODES, tot_rewards, dqn.epsilon))
             break
-        #Experience Replay
-        if len(dqn.memory) > batch_size:
-            dqn.experience_replay(batch_size)
+    #Experience Replay
+    if len(dqn.memory) > batch_size:
+        #start2 = datetime.datetime.now()
+        dqn.experience_replay(batch_size)
+        #end2 = datetime.datetime.now()
+        #print("exp replay training time {}".format(end2-start2))
     #Update the weights after each episode (You can configure this for x steps as well
     dqn.update_target_from_model()
     #If our current NN passes we are done
@@ -181,7 +187,7 @@ for e in range(EPISODES):
     #    TRAIN_END = e
     #    break
     end = datetime.datetime.now()
-    print("Runtime {}", end-start)
+    print("Episode Runtime {}".format(end-start))
     
 #%%
 
@@ -196,6 +202,15 @@ plt.plot(eps_graph, color='g', linestyle='-')
 #Plot the line where TESTING begins
 plt.axvline(x=TRAIN_END, color='y', linestyle='-')
 plt.xlim( (0,EPISODES) )
-plt.ylim( (0,shm.HORIZON) )
+plt.ylim( (0,shm.HORIZON+2) )
 #plt.show()    
 plt.savefig('learning1.png')
+
+
+#%%
+import pickle
+# save the model to disk
+pickle.dump(dqn.model, open("test.h5", 'wb'))
+
+#%%
+dqn.model.save("test.pol")
