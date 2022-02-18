@@ -34,7 +34,7 @@ for e_test in range(TEST_Episodes):
     tot_rewards = 0
     for t_test in range(shm.HORIZON):
         action = np.argmax(model.predict(state)[0])
-        nstate, reward, done, _ = shm.step(action)
+        nstate, reward, done, _ = shm.step_simulate(action)
         nstate = np.reshape( nstate, [1, nS])
         tot_rewards += reward
         #DON'T STORE ANYTHING DURING TESTING

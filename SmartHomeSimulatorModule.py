@@ -1,20 +1,18 @@
-class Preference:
-  device_name = "Tesla"
-  charge_status = 90.0
-  when = "between"
-  start_time_hour = 0
-  start_time_min = 30
-  start_time_std_min = 5
-  end_time_hour = 3
-  end_time_min = 30
-  end_time_std_min = 5
 
+
+#%%
 import pickle
 import numpy as np
-from sklearn.ensemble import RandomForestRegressor
 from numpy import asarray
 
+#%%
+# importing the module
+import json
+
 class SmartHomeSimulatorNBClass:
+  HOUSE_SIZE = 0
+  device_name = 'Tesla_S'
+  actions = []
   state_space = 4
   action_space = 2
   cur_min = 0
@@ -25,6 +23,8 @@ class SmartHomeSimulatorNBClass:
   HORIZON = 60
   path = ''
   model = ''
+  devices = {}
+  preferences = {}
 
   def get_state_space(self):
     return self.state_space
@@ -35,10 +35,11 @@ class SmartHomeSimulatorNBClass:
   def __init__(self, name_model):
     self.state_space = 4
     self.action_space = 2
-    self.load_model(name_model)
-    print("Inside constructor")
-    # body of the constructor
-
+    #self.load_model(name_model)
+    self.load_preferences()
+    self.load_device_configuration()
+    print("Constructor call successfull")
+    
   def simulate():
     print("Simulating smart home")
 
@@ -56,11 +57,38 @@ class SmartHomeSimulatorNBClass:
     self.cur_hour = 0
     self.cur_week_of_day = 0
     self.cur_charge_status = 30.0
+    self.cur_timestamp = 0
     print("Reset function")
     # Reset the model
     # clear all the history of the smart home
     return self.get_cur_state()
     
+  def load_device_configuration(self):
+    # Opening JSON file
+    with open('DeviceDictionary.json') as json_file:
+        self.devices = json.load(json_file)[self.HOUSE_SIZE]
+        
+    self.actions = list(self.devices[self.device_name]['actions'].keys())
+    self.action_space = len(self.actions)
+    for act_id in range(self.action_space):
+        for delta in self.devices[self.device_name]['actions'][self.actions[act_id]]['effects']: # 
+            delta['delta'] /= 60
+        
+  def load_preferences(self):
+    with open('Preferences.json') as json_file:
+        self.preferences = json.load(json_file)
+    for pref in self.preferences[self.device_name]:
+        if('time_relation' in pref):
+            mean_ts = pref['time1'][0]*60+pref['time1'][1]
+            std_ts = np.random.normal(0, pref['time1'][2]*60+pref['time1'][3])
+            pref["sampled_time1"] = mean_ts + std_ts
+            # TODO : Check for negative time samples
+            if('time2' in pref):
+                mean_ts = pref['time2'][0]*60+pref['time2'][1]
+                std_ts = np.random.normal(0, pref['time2'][2]*60+pref['time2'][3])
+                pref["sampled_time2"] = int(mean_ts + std_ts)
+                # TODO : Check for negative time samples
+                
     
   def update_time(self):
     self.cur_timestamp = self.cur_timestamp + 1;
@@ -91,11 +119,11 @@ class SmartHomeSimulatorNBClass:
     return state
 
   # Simulate one step in the smart home
-  def step(self, action):
+  def step_model(self, action):
     done = False
     log = ""
-    input_state_action = self.get_cur_state_action_prediction(action)
-    prediction = self.model.predict(input_state_action)
+    input_state_with_action = self.get_cur_state_action_prediction(action)
+    prediction = self.model.predict(input_state_with_action)
     ncharge_status = prediction[0][0]
     reward = prediction[0][1]
     self.update_time()
@@ -105,10 +133,58 @@ class SmartHomeSimulatorNBClass:
       done = True
     return nstate, reward, done, log
 
+  def get_delta(self, act_id):
+    return self.devices[self.device_name]['actions'][self.actions[act_id]]['effects'][0]['delta']
+    
+  def get_reward(self, action):
+    delta = self.get_delta(action)
+    if(self.cur_charge_status + delta < 100 and self.cur_charge_status + delta > 0):
+        self.cur_charge_status += delta
+    
+    for pref in self.preferences[self.device_name]:
+        # preference priorities
+        # 1. check time & property preferences
+        if('time_relation' in pref):
+            if(pref['time_relation'] == 'before' and pref['sampled_time1'] > self.cur_timestamp):
+                if(pref['property_value'] > self.cur_charge_status):
+                    # property need to increase
+                    if(delta <= 0):
+                        return -1
+            elif(pref['time_relation'] == 'after' and pref['sampled_time1'] < self.cur_timestamp):
+                if(pref['property_value'] > self.cur_charge_status):
+                    # property need to increase
+                    if(delta <= 0):
+                        return -1
+            elif(pref['time_relation'] == 'between' and pref['sampled_time1'] > self.cur_timestamp and pref['sampled_time2'] < self.cur_timestamp):
+                if(pref['property_value'] > self.cur_charge_status):
+                    # property need to increase
+                    if(delta <= 0):
+                        return -1   
+                
+        # 2. check day preferences
+        # TODO 
+    return 1  
+
+  def step_simulation(self, action):
+    done = False
+    log = ""
+    reward = self.get_reward(action) #prediction[0][1]
+    self.update_time()
+    nstate =  self.get_cur_state()
+    if(self.cur_timestamp == self.HORIZON):
+      done = True
+    return nstate, reward, done, log  
+
   # print("Simulating a minute in the smart home for action ", (, reward[0][1]))
   # return nstate, reward, done, _ like the gym environment
-#shm = SmartHomeSimulatorNBClass("RF_1month.h5")
+shm = SmartHomeSimulatorNBClass("RF_1month.h5")
+#print(shm.devices[shm.device_name])
+for x in range(10):
+   nstate, reward, done, _ = shm.step_simulation(1)
+   print(nstate,' ', reward)
 
-#for x in range(120):
-#   nstate, reward, done, _ = shm.step(1)
-#   print(nstate,' ', reward)
+#%%
+#arr = list(shm.devices[shm.device_name]['actions'].keys())
+#print(shm.devices[shm.device_name]['actions']['charge_48a']['effects'][0]['delta'])
+
+
