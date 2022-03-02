@@ -158,7 +158,7 @@ for e in range(EPISODES):
         action = dqn.action(state)
         #end1 = datetime.datetime.now()
         #print("predict time by net {}".format(end1-start1))
-        nstate, reward, done, _ = shm.step_simulation(action) # use the model to get to the next state & reward
+        nstate, reward, done, _ = shm.step_model(action) # use the model to get to the next state & reward
         nstate = np.reshape(nstate, [1, nS])
         tot_rewards += reward
         dqn.store(state, action, reward, nstate, done) # Resize to store in memory to pass to .predict
@@ -193,24 +193,24 @@ for e in range(EPISODES):
 
 #Plotting
 rolling_average = np.convolve(rewards, np.ones(100)/100)
-plt.plot(rewards)
+plt.plot(rewards, label='reward')
 #plt.plot(rolling_average, color='black')
 #plt.axhline(y=195, color='r', linestyle='-') #Solved Line
 #Scale Epsilon (0.001 - 1.0) to match reward (0 - 200) range
 eps_graph = [shm.HORIZON*x for x in epsilons]
-plt.plot(eps_graph, color='g', linestyle='-')
+plt.plot(eps_graph, color='g', linestyle='-', label='epsilon')
 #Plot the line where TESTING begins
 plt.axvline(x=TRAIN_END, color='y', linestyle='-')
 plt.xlim( (0,EPISODES) )
 plt.ylim( (0,shm.HORIZON+2) )
 #plt.show()    
-plt.savefig('learning2.png')
-
+leg = plt.legend()
+plt.savefig('policy_from_model.png')
 
 #%%
 import pickle
 # save the model to disk
-pickle.dump(dqn.model, open("test2.h5", 'wb'))
+pickle.dump(dqn.model, open("policy_from_model.h5", 'wb'))
 
 #%%
-dqn.model.save("test2.pol")
+dqn.model.save("policy_from_model.pol")

@@ -5,7 +5,7 @@
           	"property_relation" : "leq",
           	"property_value" : 90,
           	"time_relation" : "after",
-          	"time1" : [0,45,0,5]          	
+          	"start_time_distribution" : [0,45,0,5]          	
         }
    ]
 }

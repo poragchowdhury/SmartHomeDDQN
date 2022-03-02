@@ -1,5 +1,3 @@
-
-
 #%%
 import pickle
 import numpy as np
@@ -35,7 +33,7 @@ class SmartHomeSimulatorNBClass:
   def __init__(self, name_model):
     self.state_space = 4
     self.action_space = 2
-    #self.load_model(name_model)
+    self.load_model(name_model)
     self.load_preferences()
     self.load_device_configuration()
     print("Constructor call successfull")
@@ -79,13 +77,13 @@ class SmartHomeSimulatorNBClass:
         self.preferences = json.load(json_file)
     for pref in self.preferences[self.device_name]:
         if('time_relation' in pref):
-            mean_ts = pref['time1'][0]*60+pref['time1'][1]
-            std_ts = np.random.normal(0, pref['time1'][2]*60+pref['time1'][3])
+            mean_ts = pref['start_time_distribution'][0]*60+pref['start_time_distribution'][1]
+            std_ts = np.random.normal(0, pref['start_time_distribution'][2]*60+pref['start_time_distribution'][3])
             pref["sampled_time1"] = mean_ts + std_ts
             # TODO : Check for negative time samples
-            if('time2' in pref):
-                mean_ts = pref['time2'][0]*60+pref['time2'][1]
-                std_ts = np.random.normal(0, pref['time2'][2]*60+pref['time2'][3])
+            if('end_time_distribution' in pref):
+                mean_ts = pref['end_time_distribution'][0]*60+pref['end_time_distribution'][1]
+                std_ts = np.random.normal(0, pref['end_time_distribution'][2]*60+pref['end_time_distribution'][3])
                 pref["sampled_time2"] = int(mean_ts + std_ts)
                 # TODO : Check for negative time samples
                 
@@ -177,11 +175,11 @@ class SmartHomeSimulatorNBClass:
 
   # print("Simulating a minute in the smart home for action ", (, reward[0][1]))
   # return nstate, reward, done, _ like the gym environment
-shm = SmartHomeSimulatorNBClass("RF_1month.h5")
+#shm = SmartHomeSimulatorNBClass("RF_1month.h5")
 #print(shm.devices[shm.device_name])
-for x in range(10):
-   nstate, reward, done, _ = shm.step_simulation(1)
-   print(nstate,' ', reward)
+#for x in range(10):
+#   nstate, reward, done, _ = shm.step_model(1)
+#   print(nstate,' ', reward)
 
 #%%
 #arr = list(shm.devices[shm.device_name]['actions'].keys())
