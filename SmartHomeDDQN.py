@@ -13,9 +13,9 @@ from tensorflow import keras
 #from keras.optimizers import Adam
 import random
 
-import SmartHomeSimulatorModule
+import SmartHomeModule
 # Loadling the SmartHomeModule
-shm = SmartHomeSimulatorModule.SmartHomeSimulatorNBClass("RF_1month.h5")
+shm = SmartHomeModule.SmartHomeSimulator("RF_1month.h5")
 shm.HORIZON = 1*24*60
 #%%
 
@@ -205,12 +205,12 @@ plt.xlim( (0,EPISODES) )
 plt.ylim( (0,shm.HORIZON+2) )
 #plt.show()    
 leg = plt.legend()
-plt.savefig('policy_from_model.png')
+plt.savefig('policy_from_model3.png')
 
 #%%
 import pickle
 # save the model to disk
-pickle.dump(dqn.model, open("policy_from_model.h5", 'wb'))
+pickle.dump(dqn.model, open("policy_from_model3.h5", 'wb'))
 
 #%%
-dqn.model.save("policy_from_model.pol")
+dqn.model.save("policy_from_model3.pol")
