@@ -4,7 +4,7 @@ import random
 
 #%%
 shm = SmartHomeModule.SmartHomeSimulator("RF_1month.h5")
-TOTAL_DAYS = 30
+TOTAL_DAYS = 1
 HOUR_IN_A_DAY = 24
 MINUTE_IN_A_HOUR = 60
 shm.HORIZON = TOTAL_DAYS*HOUR_IN_A_DAY*MINUTE_IN_A_HOUR
@@ -31,5 +31,5 @@ def generate_dataset(log_file_name, SEED):
             break;
     f.close()
 
-generate_dataset("train_dataset.csv", 1)
-generate_dataset("test_dataset.csv", 2)
+generate_dataset("train_dataset_withdays.csv", 1)
+generate_dataset("test_dataset_withdays.csv", 2)

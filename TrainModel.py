@@ -17,8 +17,8 @@ def get_dataset(file):
 
 
 # load dataset
-train_file = 'train_dataset.csv'
-test_file = 'test_dataset.csv'
+train_file = 'train_dataset_withdays.csv'
+test_file = 'test_dataset_withdays.csv'
 
 X_train, y_train = get_dataset(train_file)
 X_test, y_test = get_dataset(test_file)
@@ -59,7 +59,7 @@ regr_rf.fit(X_train, y_train)
 
 import pickle
 # save the model to disk
-filename = '/content/drive/MyDrive/Models/RF_1month.h5'
+filename = 'RF_1month_withdays.h5'
 pickle.dump(regr_rf, open(filename, 'wb'))
 #regr_rf.save("RF.h5");
 #model.save('/content/drive/MyDrive/Models/NN_model.h5')
@@ -67,7 +67,7 @@ pickle.dump(regr_rf, open(filename, 'wb'))
 
 #%%
 
-loaded_model = pickle.load(open('/content/drive/MyDrive/Models/RF_1month.h5', 'rb'))
+loaded_model = pickle.load(open('RF_1month_withdays.h5', 'rb'))
 
 #%%
 

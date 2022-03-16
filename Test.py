@@ -5,7 +5,7 @@ from tensorflow import keras
 import pickle
 #%%
 
-model_name = "policy_from_model3.pol" #"test2.pol"
+model_name = "policy_from_simulation_withdays.pol" #"test2.pol"
 # load the model to disk
 print("Loading model..")
 model = keras.models.load_model(model_name)
@@ -15,7 +15,7 @@ model = keras.models.load_model(model_name)
 print("Model loaded successfully")
 
 shm = SmartHomeModule.SmartHomeSimulator("RF_1month.h5")
-shm.HORIZON = 1*24*60
+shm.HORIZON = 7*24*60
 
 nS = shm.state_space #This is only 6
 nA = shm.action_space #Actions 2
@@ -37,7 +37,7 @@ for e_test in range(TEST_Episodes):
     tot_rewards = 0
     for t_test in range(shm.HORIZON):
         action = np.argmax(model.predict(state)[0])
-        nstate, reward, done, _ = shm.step_model(action)
+        nstate, reward, done, _ = shm.step_simulation(action)
         nstate = np.reshape( nstate, [1, nS])
         tot_rewards += reward
         #DON'T STORE ANYTHING DURING TESTING

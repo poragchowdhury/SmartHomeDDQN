@@ -5,7 +5,17 @@
           	"property_relation" : "leq",
           	"property_value" : 90,
           	"time_relation" : "after",
-          	"start_time_distribution" : [0,45,0,5]          	
-        }
+          	"start_time_distribution" : [0,45,0,5],
+          	"day_relation" : ["Sat", "Tues"]          	
+        },
+       	{ 
+           	"property" : "charge", 
+           	"property_relation" : "leq",
+           	"property_value" : 70,
+           	"time_relation" : "between",
+           	"start_time_distribution" : [3,45,0,5],
+           	"end_time_distribution" : [5,45,0,5],
+           	"day_relation" : ["Sun","Thurs", "Fri"]          	
+         }
    ]
 }

@@ -6,7 +6,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import deque
-import tensorflow as tf
 from tensorflow import keras
 #from keras.models import Sequential
 #from keras.layers import Dense
@@ -15,8 +14,8 @@ import random
 
 import SmartHomeModule
 # Loadling the SmartHomeModule
-shm = SmartHomeModule.SmartHomeSimulator("RF_1month.h5")
-shm.HORIZON = 1*24*60
+shm = SmartHomeModule.SmartHomeSimulator("RF_1month_withdays.h5")
+shm.HORIZON = 7*24*60
 #%%
 
 EPISODES = 100
@@ -205,12 +204,12 @@ plt.xlim( (0,EPISODES) )
 plt.ylim( (0,shm.HORIZON+2) )
 #plt.show()    
 leg = plt.legend()
-plt.savefig('policy_from_model3.png')
+plt.savefig('policy_from_model_withdays.png')
 
 #%%
 import pickle
 # save the model to disk
-pickle.dump(dqn.model, open("policy_from_model3.h5", 'wb'))
+pickle.dump(dqn.model, open("policy_from_model_withdays.h5", 'wb'))
 
 #%%
-dqn.model.save("policy_from_model3.pol")
+dqn.model.save("policy_from_model_withdays.pol")
