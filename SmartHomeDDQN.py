@@ -11,15 +11,23 @@ from tensorflow import keras
 #from keras.layers import Dense
 #from keras.optimizers import Adam
 import random
-
 import SmartHomeModule
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
 # Loadling the SmartHomeModule
 shm = SmartHomeModule.SmartHomeSimulator("RF_1month_withdays.h5")
 shm.HORIZON = 7*24*60
+ALPHA = 0.0
+TRAINING_EPISODES = 200
+TEST_Episodes = 0
+filename = "policy_from_simulation_NN_5_PriceTest_alpha_" + str(ALPHA) + "_episode_" + str(TRAINING_EPISODES)
+
+
 #%%
 
-EPISODES = 100
+
 TRAIN_END = 0
+
 
 def discount_rate(): #Gamma
     return 0.95
@@ -29,6 +37,18 @@ def learning_rate(): #Alpha
 
 def batch_size():
     return 200
+
+# A pricing schema used by the Pacific Gas & Electric Co. for its customers 
+# in parts of California, 3 which accounts for
+# 7 tiers ranging from $0.198 per kWh to $0.849 per kWh, reported in Table 5 
+
+priceschema = [0.198, 0.198, 0.198, 0.198, 0.198, 0.198, 0.198, 0.198, # [0:00 - 7:59]
+               0.225, 0.225, 0.225, 0.225, # [8:00 - 11:59]
+               0.249, 0.249, # [12:00 - 13:59]
+               0.849, 0.849, 0.849, 0.849, # [14:00 - 17:59]
+               0.225, 0.225, 0.225, 0.225, # [18:00 - 21:59]
+               0.198, 0.198] # [22:00-23:59]
+maxprice = 0.849
 
 #%%
 
@@ -55,6 +75,7 @@ class DoubleDeepQNetwork():
         #   24: Number of neurons
         #   input_dim: Number of input variables
         #   activation: Rectified Linear Unit (relu) ranges >= 0
+        model.add(keras.layers.Dense(10, activation='relu')) #Layer 2 -> 3
         model.add(keras.layers.Dense(7, activation='relu')) #Layer 2 -> 3
         model.add(keras.layers.Dense(self.nA, activation='linear')) #Layer 3 -> [output]
         #   Size has to match the output (different actions)
@@ -80,6 +101,13 @@ class DoubleDeepQNetwork():
     def store(self, state, action, reward, nstate, done):
         #Store the experience in memory
         self.memory.append( (state, action, reward, nstate, done) )
+
+    def reward_fuction(self, state, action, reward, alpha, priceschema, maxprice):
+        cost = 1.0
+        if(action != 0):
+            cost = ((maxprice-priceschema[int(state[1])])/maxprice)
+        new_reward = alpha * reward + (1-alpha) * cost 
+        return new_reward
 
     def experience_replay(self, batch_size):
         
@@ -140,26 +168,37 @@ dqn = DoubleDeepQNetwork(nS, nA, learning_rate(), discount_rate(), 1, 0.001, 0.9
 batch_size = batch_size()
 
 
+
+    
 #%%
 import datetime
 #Training
 rewards = [] #Store rewards for graphing
 epsilons = [] # Store the Explore/Exploit
-TEST_Episodes = 0
 
-for e in range(EPISODES):
+
+for e in range(TRAINING_EPISODES):
     start = datetime.datetime.now()
-    state = shm.reset()
-    state = np.reshape(state, [1, nS]) # Resize to store in memory to pass to .predict
+    np_state = shm.reset()
+    state = np.reshape(np_state, [1, nS]) # Resize to store in memory to pass to .predict
     tot_rewards = 0
     for time in range(shm.HORIZON): #200 is when you "solve" the game. This can continue forever as far as I know
         #start1 = datetime.datetime.now()
         action = dqn.action(state)
         #end1 = datetime.datetime.now()
         #print("predict time by net {}".format(end1-start1))
-        nstate, reward, done, _ = shm.step_model(action) # use the model to get to the next state & reward
-        nstate = np.reshape(nstate, [1, nS])
+        
+        np_nstate, reward, done, _ = shm.step_simulation(action) # use the model to get to the next state & reward
+        nstate = np.reshape(np_nstate, [1, nS])
+        
+        # apply the reward fuction here
+        #print("state {} hour {} priceschema {}".format(state, int(np_state[1]), priceschema[int(np_state[1])]))
+        reward = dqn.reward_fuction(np_state, action, reward, ALPHA, priceschema, maxprice)
+        
         tot_rewards += reward
+        
+        
+        
         dqn.store(state, action, reward, nstate, done) # Resize to store in memory to pass to .predict
         state = nstate
         #done: CartPole fell. 
@@ -168,7 +207,7 @@ for e in range(EPISODES):
             rewards.append(tot_rewards)
             epsilons.append(dqn.epsilon)
             print("episode: {}/{}, score: {}, e: {}"
-                  .format(e, EPISODES, tot_rewards, dqn.epsilon))
+                  .format(e, TRAINING_EPISODES, tot_rewards, dqn.epsilon))
             break
     #Experience Replay
     if len(dqn.memory) > batch_size:
@@ -189,7 +228,6 @@ for e in range(EPISODES):
     print("Episode Runtime {}".format(end-start))
     
 #%%
-
 #Plotting
 rolling_average = np.convolve(rewards, np.ones(100)/100)
 plt.plot(rewards, label='reward')
@@ -200,16 +238,66 @@ eps_graph = [shm.HORIZON*x for x in epsilons]
 plt.plot(eps_graph, color='g', linestyle='-', label='epsilon')
 #Plot the line where TESTING begins
 plt.axvline(x=TRAIN_END, color='y', linestyle='-')
-plt.xlim( (0,EPISODES) )
+plt.xlim( (0,TRAINING_EPISODES) )
 plt.ylim( (0,shm.HORIZON+2) )
 #plt.show()    
 leg = plt.legend()
-plt.savefig('policy_from_model_withdays.png')
+plt.savefig(filename +'.png')
 
 #%%
-import pickle
+#import pickle
 # save the model to disk
-pickle.dump(dqn.model, open("policy_from_model_withdays.h5", 'wb'))
+#pickle.dump(dqn.model, open("policy_from_simulation_withdays_NN5_tran1.h5", 'wb'))
 
 #%%
-dqn.model.save("policy_from_model_withdays.pol")
+dqn.model.save(filename + ".pol")
+
+
+#%%
+
+shm.HORIZON = 1*24*60
+
+nS = shm.state_space #This is only 6
+nA = shm.action_space #Actions 2
+
+
+
+#Testing
+#print('Training complete. Testing started...')
+#TEST Time
+#   In this section we ALWAYS use exploit don't train any more
+
+rewards = []
+epsilons = []
+
+print("Testing {}".format(filename))
+
+for e_test in range(TEST_Episodes):
+    np_state = shm.reset()
+    state = np.reshape(np_state, [1, nS])
+    tot_rewards = 0
+    cost = 0
+    
+    for t_test in range(shm.HORIZON):
+        action = np.argmax(dqn.predict(state)[0])
+        
+        nstate, reward, done, _ = shm.step_simulation(action)
+        
+        if(action != 0):
+            cost += priceschema[int(np_state[1])]
+            print("action {} min {} hour {} charge {} reward {} cost {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, cost, shm.cur_timestamp))
+        
+        #if(nstate[0] == 0):
+        #print("action {} min {} hour {} charge {} reward {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, shm.cur_timestamp))
+        nstate = np.reshape( nstate, [1, nS])
+        tot_rewards += reward
+        #DON'T STORE ANYTHING DURING TESTING
+        state = nstate
+        #done: CartPole fell. 
+        #t_test == 209: CartPole stayed upright
+        if done or t_test == shm.HORIZON - 1: 
+            rewards.append(tot_rewards)
+            epsilons.append(0) #We are doing full exploit
+            print("episode: {}/{}, pref_score: {}, cost: {}"
+                  .format(e_test, TEST_Episodes, tot_rewards, cost))
+            break;

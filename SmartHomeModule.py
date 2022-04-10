@@ -2,7 +2,8 @@
 import pickle
 import numpy as np
 from numpy import asarray
-
+from tensorflow.python.client import device_lib
+print(device_lib.list_local_devices())
 #%%
 # importing the module
 import json
@@ -10,6 +11,7 @@ import json
 class SmartHomeSimulator:
     HOUSE_SIZE = 0
     device_name = 'Tesla_S'
+    preference_filename = "TeslaPricePreferenceTest.json"
     actions = []
     state_space = 4
     action_space = 2
@@ -57,6 +59,7 @@ class SmartHomeSimulator:
         self.cur_week_of_day = 0
         self.cur_charge_status = 30.0
         self.cur_timestamp = 0
+        self.load_preferences()
         print("Reset function")
         # Reset the model
         # clear all the history of the smart home
@@ -68,19 +71,20 @@ class SmartHomeSimulator:
             self.devices = json.load(json_file)[self.HOUSE_SIZE]
             
         self.actions = list(self.devices[self.device_name]['actions'].keys())
+        print(self.actions)
         self.action_space = len(self.actions)
         for act_id in range(self.action_space):
             for delta in self.devices[self.device_name]['actions'][self.actions[act_id]]['effects']: # 
                 delta['delta'] /= 60
           
     def load_preferences(self):
-        with open('Preferences.json') as json_file:
+        with open(self.preference_filename) as json_file:
             self.preferences = json.load(json_file)
         for pref in self.preferences[self.device_name]:
             if('time_relation' in pref):
                 mean_ts = pref['start_time_distribution'][0]*60+pref['start_time_distribution'][1]
                 std_ts = np.random.normal(0, pref['start_time_distribution'][2]*60+pref['start_time_distribution'][3])
-                pref["sampled_time1"] = mean_ts + std_ts
+                pref["sampled_time1"] = int(mean_ts + std_ts)
                 # TODO : Check for negative time samples
                 if('end_time_distribution' in pref):
                     mean_ts = pref['end_time_distribution'][0]*60+pref['end_time_distribution'][1]
@@ -92,14 +96,14 @@ class SmartHomeSimulator:
     def update_time(self):
         self.cur_timestamp = self.cur_timestamp + 1;
         self.cur_min = self.cur_min + 1
-        if(self.cur_min == 60):
-          self.cur_min == 0
-          self.cur_hour = self.cur_hour + 1
-          if(self.cur_hour == 24):
-            self.cur_hour == 0
-            self.cur_week_of_day = self.cur_week_of_day + 1
-            if(self.cur_week_of_day == 7):
-              self.cur_week_of_day = 0
+        if((self.cur_timestamp % 60) == 0):
+            self.cur_min = 0
+            self.cur_hour = self.cur_hour + 1
+            if((self.cur_hour % 24) == 0):
+                self.cur_hour = 0
+                self.cur_week_of_day = self.cur_week_of_day + 1
+                if((self.cur_week_of_day % 7) == 0):
+                    self.cur_week_of_day = 0
     
     def get_cur_state_action_prediction(self, action):
         state = []
@@ -138,7 +142,6 @@ class SmartHomeSimulator:
     def is_valid_day(self, pref):
         if('day_relation' not in pref): 
             return True  
-        
         for day in pref['day_relation']:
             if(day == self.days[self.cur_week_of_day]):
                 return True  
@@ -147,11 +150,19 @@ class SmartHomeSimulator:
     
       
     def simulation(self, action):
+        debug = False
         delta = self.get_delta(action)
         if(self.cur_charge_status + delta < 100 and self.cur_charge_status + delta > 0):
             self.cur_charge_status += delta
+        elif(self.cur_charge_status + delta > 100):
+            if(debug):
+                print("action {} curTS {} st {} end {} charge {} hour {} reward -1".format(action, self.cur_timestamp, self.preferences['Tesla_S'][0]['sampled_time1'], self.preferences['Tesla_S'][0]['sampled_time2'], self.cur_charge_status, self.cur_hour))
+            return -1
         
         for pref in self.preferences[self.device_name]:
+            if(debug):
+                print("action {} curTS {} st {} end {} charge {} hour {}".format(action, self.cur_timestamp, pref['sampled_time1'], pref['sampled_time2'], self.cur_charge_status, self.cur_hour))
+            
             # preference priorities
             # 1. check time & property preferences
             
@@ -161,20 +172,29 @@ class SmartHomeSimulator:
                         if(pref['property_value'] > self.cur_charge_status):
                             # property need to increase
                             if(delta <= 0):
+                                if(debug):
+                                    print("reward -1")
                                 return -1
                     elif(pref['time_relation'] == 'after' and pref['sampled_time1'] < self.cur_timestamp):
                         if(pref['property_value'] > self.cur_charge_status):
                             # property need to increase
                             if(delta <= 0):
+                                if(debug):
+                                    print("reward -1")
                                 return -1
-                    elif(pref['time_relation'] == 'between' and pref['sampled_time1'] > self.cur_timestamp and pref['sampled_time2'] < self.cur_timestamp):
-                        if(pref['property_value'] > self.cur_charge_status):
-                            # property need to increase
-                            if(delta <= 0):
-                                return -1   
+                    elif(pref['time_relation'] == 'between'): 
+                        if (pref['sampled_time1'] < self.cur_timestamp and pref['sampled_time2'] > self.cur_timestamp):
+                            if(pref['property_value'] > self.cur_charge_status):
+                                # property need to increase
+                                if(delta <= 0):
+                                    if(debug):
+                                        print("reward -1")
+                                    return -1   
                     
             # 2. check day preferences
             # TODO 
+        if(debug):
+            print("reward 1")
         return 1  
     
     def step_simulation(self, action):

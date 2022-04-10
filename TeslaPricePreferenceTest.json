@@ -1,0 +1,12 @@
+{
+   "Tesla_S": [		
+      	{ 
+          	"property" : "charge", 
+          	"property_relation" : "leq",
+          	"property_value" : 90,
+          	"time_relation" : "between",
+          	"start_time_distribution" : [15,0,0,5],
+          	"end_time_distribution" : [21,0,0,5]         
+        }
+   ]
+}
