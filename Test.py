@@ -4,9 +4,10 @@ import SmartHomeModule
 from tensorflow import keras
 #import pickle
 #%%
-ALPHA = 0.0
-TRAINING_EPISODES = 200
+ALPHA = 0.7
+TRAINING_EPISODES = 1000
 TEST_Episodes = 1
+
 model_name = "policy_from_simulation_NN_5_PriceTest_alpha_" + str(ALPHA) + "_episode_" + str(TRAINING_EPISODES) + ".pol"
 
 #model_name = 'policy_from_simulation_NN_5_PriceTest_alpha_0.0.pol' #"test2.pol"
@@ -55,7 +56,7 @@ for e_test in range(TEST_Episodes):
 
         if(action != 0):
             cost += priceschema[int(np_state[1])]
-            print("action {} min {} hour {} charge {} reward {} cost {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, cost, shm.cur_timestamp))
+            #print("action {} min {} hour {} charge {} reward {} cost {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, cost, shm.cur_timestamp))
         
         #if(nstate[0] == 0):
         #print("action {} min {} hour {} charge {} reward {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, shm.cur_timestamp))

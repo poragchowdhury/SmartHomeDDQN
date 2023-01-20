@@ -26,6 +26,10 @@ class SmartHomeSimulator:
     devices = {}
     preferences = {}
     days = ["Sat", "Sun", "Mon", "Tues", "Wed", "Thurs", "Fri"]
+    n_default = 0
+    I_default = 0.5
+    n = n_default
+    I = I_default
     
     def get_state_space(self):
         return self.state_space
@@ -60,6 +64,8 @@ class SmartHomeSimulator:
         self.cur_charge_status = 30.0
         self.cur_timestamp = 0
         self.load_preferences()
+        self.I = self.I_default
+        self.n = self.n_default
         print("Reset function")
         # Reset the model
         # clear all the history of the smart home
@@ -147,17 +153,26 @@ class SmartHomeSimulator:
                 return True  
         return False
       
-    
+    # I is the initial inertia
+    # I = 0 very lazy : slope = 0
+    # I = 1 very active : slope = Infinity
+    def get_inertia(self):
+      I_a = (1 - pow(2, -self.n)) * self.I
+      print("Inertia {}".format(I_a))
+      return I_a
       
     def simulation(self, action):
+        discomfort = 0
+        comfort = 1
         debug = False
         delta = self.get_delta(action)
+        
         if(self.cur_charge_status + delta < 100 and self.cur_charge_status + delta > 0):
             self.cur_charge_status += delta
         elif(self.cur_charge_status + delta > 100):
             if(debug):
                 print("action {} curTS {} st {} end {} charge {} hour {} reward -1".format(action, self.cur_timestamp, self.preferences['Tesla_S'][0]['sampled_time1'], self.preferences['Tesla_S'][0]['sampled_time2'], self.cur_charge_status, self.cur_hour))
-            return -1
+            return discomfort
         
         for pref in self.preferences[self.device_name]:
             if(debug):
@@ -174,14 +189,20 @@ class SmartHomeSimulator:
                             if(delta <= 0):
                                 if(debug):
                                     print("reward -1")
-                                return -1
+                                self.n = self.n + 1
+                                I_a = self.get_inertia()
+                                if(I_a > 0.5):
+                                    return discomfort
                     elif(pref['time_relation'] == 'after' and pref['sampled_time1'] < self.cur_timestamp):
                         if(pref['property_value'] > self.cur_charge_status):
                             # property need to increase
                             if(delta <= 0):
                                 if(debug):
                                     print("reward -1")
-                                return -1
+                                self.n = self.n + 1
+                                I_a = self.get_inertia()
+                                if(I_a > 0.5):
+                                    return discomfort
                     elif(pref['time_relation'] == 'between'): 
                         if (pref['sampled_time1'] < self.cur_timestamp and pref['sampled_time2'] > self.cur_timestamp):
                             if(pref['property_value'] > self.cur_charge_status):
@@ -189,13 +210,19 @@ class SmartHomeSimulator:
                                 if(delta <= 0):
                                     if(debug):
                                         print("reward -1")
-                                    return -1   
+                                    self.n = self.n + 1
+                                    I_a = self.get_inertia()
+                                    if(I_a > 0.5):
+                                        return discomfort
+                    #else:
+                    #    self.I = self.I_default
+                    #    self.n = self.n_default
                     
             # 2. check day preferences
             # TODO 
         if(debug):
             print("reward 1")
-        return 1  
+        return comfort  
     
     def step_simulation(self, action):
         done = False

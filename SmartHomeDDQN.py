@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import deque
 from tensorflow import keras
+import datetime
 #from keras.models import Sequential
 #from keras.layers import Dense
 #from keras.optimizers import Adam
@@ -16,12 +17,14 @@ from tensorflow.python.client import device_lib
 print(device_lib.list_local_devices())
 # Loadling the SmartHomeModule
 shm = SmartHomeModule.SmartHomeSimulator("RF_1month_withdays.h5")
-shm.HORIZON = 7*24*60
-ALPHA = 0.0
-TRAINING_EPISODES = 200
-TEST_Episodes = 0
-filename = "policy_from_simulation_NN_5_PriceTest_alpha_" + str(ALPHA) + "_episode_" + str(TRAINING_EPISODES)
+shm.HORIZON = 1*24*60
 
+TRAINING_EPISODES = 1
+TEST_Episodes = 1
+RESULT_FILE_NAME = "pricetest_exp2.csv"
+PNG_FILE_NAME = "_simulation_NN_5_PriceTest_alpha_"
+alphas = [1.0]#, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+#alphas = [0.2, 0.4, 0.6, 0.8]
 
 #%%
 
@@ -161,143 +164,155 @@ class DoubleDeepQNetwork():
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
-nS = shm.state_space #This is only 6
-nA = shm.action_space #Actions 2
-dqn = DoubleDeepQNetwork(nS, nA, learning_rate(), discount_rate(), 1, 0.001, 0.995 )
-
-batch_size = batch_size()
-
 
 
     
 #%%
-import datetime
 #Training
-rewards = [] #Store rewards for graphing
-epsilons = [] # Store the Explore/Exploit
-
-
-for e in range(TRAINING_EPISODES):
-    start = datetime.datetime.now()
-    np_state = shm.reset()
-    state = np.reshape(np_state, [1, nS]) # Resize to store in memory to pass to .predict
-    tot_rewards = 0
-    for time in range(shm.HORIZON): #200 is when you "solve" the game. This can continue forever as far as I know
-        #start1 = datetime.datetime.now()
-        action = dqn.action(state)
-        #end1 = datetime.datetime.now()
-        #print("predict time by net {}".format(end1-start1))
+def train(alpha):
+    filename = "policy_from_" + str(PNG_FILE_NAME) + str(alpha) + "_episode_" + str(TRAINING_EPISODES)
+    rewards = [] #Store rewards for graphing
+    epsilons = [] # Store the Explore/Exploit
+    nS = shm.state_space #This is only 6
+    nA = shm.action_space #Actions 2
+    batch_size = 200 #batch_size()
+    dqn = DoubleDeepQNetwork(nS, nA, learning_rate(), discount_rate(), 1, 0.001, 0.995 )
+    for e in range(TRAINING_EPISODES):
+        start = datetime.datetime.now()
+        np_state = shm.reset()
+        state = np.reshape(np_state, [1, nS]) # Resize to store in memory to pass to .predict
+        tot_rewards = 0
+        for time in range(shm.HORIZON): #200 is when you "solve" the game. This can continue forever as far as I know
+            #start1 = datetime.datetime.now()
+            action = dqn.action(state)
+            #end1 = datetime.datetime.now()
+            #print("predict time by net {}".format(end1-start1))
+            
+            np_nstate, reward, done, _ = shm.step_simulation(action) # use the model to get to the next state & reward
+            nstate = np.reshape(np_nstate, [1, nS])
+            
+            # apply the reward fuction here
+            #print("state {} hour {} priceschema {}".format(state, int(np_state[1]), priceschema[int(np_state[1])]))
+            reward = dqn.reward_fuction(np_state, action, reward, alpha, priceschema, maxprice)
+            
+            tot_rewards += reward
+            
+            
+            
+            dqn.store(state, action, reward, nstate, done) # Resize to store in memory to pass to .predict
+            state = nstate
+            #done: CartPole fell. 
+            #time == 209: CartPole stayed upright
+            if done or time == shm.HORIZON-1:
+                rewards.append(tot_rewards)
+                epsilons.append(dqn.epsilon)
+                print("episode: {}/{}, score: {}, e: {}"
+                      .format(e, TRAINING_EPISODES, tot_rewards, dqn.epsilon))
+                break
+        #Experience Replay
+        if len(dqn.memory) > batch_size:
+            #start2 = datetime.datetime.now()
+            dqn.experience_replay(batch_size)
+            #end2 = datetime.datetime.now()
+            #print("exp replay training time {}".format(end2-start2))
+        #Update the weights after each episode (You can configure this for x steps as well
+        dqn.update_target_from_model()
+        #If our current NN passes we are done
+        #I am going to use the last 5 runs
+        #if len(rewards) > 5 and np.average(rewards[-5:]) > 195:
+            #Set the rest of the EPISODES for testing
+        #    TEST_Episodes = EPISODES - e
+        #    TRAIN_END = e
+        #    break
+        end = datetime.datetime.now()
+        print("Episode Runtime {}".format(end-start))
         
-        np_nstate, reward, done, _ = shm.step_simulation(action) # use the model to get to the next state & reward
-        nstate = np.reshape(np_nstate, [1, nS])
-        
-        # apply the reward fuction here
-        #print("state {} hour {} priceschema {}".format(state, int(np_state[1]), priceschema[int(np_state[1])]))
-        reward = dqn.reward_fuction(np_state, action, reward, ALPHA, priceschema, maxprice)
-        
-        tot_rewards += reward
-        
-        
-        
-        dqn.store(state, action, reward, nstate, done) # Resize to store in memory to pass to .predict
-        state = nstate
-        #done: CartPole fell. 
-        #time == 209: CartPole stayed upright
-        if done or time == shm.HORIZON-1:
-            rewards.append(tot_rewards)
-            epsilons.append(dqn.epsilon)
-            print("episode: {}/{}, score: {}, e: {}"
-                  .format(e, TRAINING_EPISODES, tot_rewards, dqn.epsilon))
-            break
-    #Experience Replay
-    if len(dqn.memory) > batch_size:
-        #start2 = datetime.datetime.now()
-        dqn.experience_replay(batch_size)
-        #end2 = datetime.datetime.now()
-        #print("exp replay training time {}".format(end2-start2))
-    #Update the weights after each episode (You can configure this for x steps as well
-    dqn.update_target_from_model()
-    #If our current NN passes we are done
-    #I am going to use the last 5 runs
-    #if len(rewards) > 5 and np.average(rewards[-5:]) > 195:
-        #Set the rest of the EPISODES for testing
-    #    TEST_Episodes = EPISODES - e
-    #    TRAIN_END = e
-    #    break
-    end = datetime.datetime.now()
-    print("Episode Runtime {}".format(end-start))
+    #%%
+    #Plotting
+    #rolling_average = np.convolve(rewards, np.ones(100)/100)
+    plt.plot(rewards, label='reward')
+    #plt.plot(rolling_average, color='black')
+    #plt.axhline(y=195, color='r', linestyle='-') #Solved Line
+    #Scale Epsilon (0.001 - 1.0) to match reward (0 - 200) range
+    eps_graph = [shm.HORIZON*x for x in epsilons]
+    plt.plot(eps_graph, color='g', linestyle='-', label='epsilon')
+    #Plot the line where TESTING begins
+    plt.axvline(x=TRAIN_END, color='y', linestyle='-')
+    plt.xlim( (0,TRAINING_EPISODES) )
+    plt.ylim( (0,shm.HORIZON+2) )
+    #plt.show()    
+    #leg = plt.legend()
+    plt.legend()
+    plt.savefig(filename +'.png')
+    plt.clf()
+    #%%
+    #import pickle
+    # save the model to disk
+    #pickle.dump(dqn.model, open("policy_from_simulation_withdays_NN5_tran1.h5", 'wb'))
     
-#%%
-#Plotting
-rolling_average = np.convolve(rewards, np.ones(100)/100)
-plt.plot(rewards, label='reward')
-#plt.plot(rolling_average, color='black')
-#plt.axhline(y=195, color='r', linestyle='-') #Solved Line
-#Scale Epsilon (0.001 - 1.0) to match reward (0 - 200) range
-eps_graph = [shm.HORIZON*x for x in epsilons]
-plt.plot(eps_graph, color='g', linestyle='-', label='epsilon')
-#Plot the line where TESTING begins
-plt.axvline(x=TRAIN_END, color='y', linestyle='-')
-plt.xlim( (0,TRAINING_EPISODES) )
-plt.ylim( (0,shm.HORIZON+2) )
-#plt.show()    
-leg = plt.legend()
-plt.savefig(filename +'.png')
+    #%%
+    dqn.model.save(filename + ".pol")
+    return filename
 
 #%%
-#import pickle
-# save the model to disk
-#pickle.dump(dqn.model, open("policy_from_simulation_withdays_NN5_tran1.h5", 'wb'))
-
-#%%
-dqn.model.save(filename + ".pol")
-
-
-#%%
-
-shm.HORIZON = 1*24*60
-
-nS = shm.state_space #This is only 6
-nA = shm.action_space #Actions 2
-
-
-
-#Testing
-#print('Training complete. Testing started...')
-#TEST Time
-#   In this section we ALWAYS use exploit don't train any more
-
-rewards = []
-epsilons = []
-
-print("Testing {}".format(filename))
-
-for e_test in range(TEST_Episodes):
-    np_state = shm.reset()
-    state = np.reshape(np_state, [1, nS])
-    tot_rewards = 0
-    cost = 0
+# Testing
+def test(filename):
+    shm.HORIZON = 1*24*60
     
-    for t_test in range(shm.HORIZON):
-        action = np.argmax(dqn.predict(state)[0])
-        
-        nstate, reward, done, _ = shm.step_simulation(action)
-        
-        if(action != 0):
-            cost += priceschema[int(np_state[1])]
-            print("action {} min {} hour {} charge {} reward {} cost {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, cost, shm.cur_timestamp))
-        
-        #if(nstate[0] == 0):
-        #print("action {} min {} hour {} charge {} reward {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, shm.cur_timestamp))
-        nstate = np.reshape( nstate, [1, nS])
-        tot_rewards += reward
-        #DON'T STORE ANYTHING DURING TESTING
-        state = nstate
-        #done: CartPole fell. 
-        #t_test == 209: CartPole stayed upright
-        if done or t_test == shm.HORIZON - 1: 
-            rewards.append(tot_rewards)
-            epsilons.append(0) #We are doing full exploit
-            print("episode: {}/{}, pref_score: {}, cost: {}"
-                  .format(e_test, TEST_Episodes, tot_rewards, cost))
-            break;
+    nS = shm.state_space #This is only 6
+    nA = shm.action_space #Actions 2
+    
+    #Testing
+    #print('Training complete. Testing started...')
+    #TEST Time
+    #   In this section we ALWAYS use exploit don't train any more
+    
+    dqn = keras.models.load_model(filename+".pol")
+    rewards = []
+    costs = []
+    epsilons = []
+    
+    print("Testing {}".format(filename))
+    for e_test in range(TEST_Episodes):
+        np_state = shm.reset()
+        state = np.reshape(np_state, [1, nS])
+        tot_rewards = 0
+        cost = 0
+        for t_test in range(shm.HORIZON):
+            action = np.argmax(dqn.predict(state)[0])
+            
+            nstate, reward, done, _ = shm.step_simulation(action)
+            
+            if(action != 0):
+                cost += priceschema[int(np_state[1])]
+                print("action {} min {} hour {} charge {} reward {} cost {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, cost, shm.cur_timestamp))
+            
+            #if(nstate[0] == 0):
+            #print("action {} min {} hour {} charge {} reward {} ts {}".format(action, nstate[0], nstate[1], nstate[3], reward, shm.cur_timestamp))
+            nstate = np.reshape( nstate, [1, nS])
+            tot_rewards += reward
+            #DON'T STORE ANYTHING DURING TESTING
+            state = nstate
+            #done: CartPole fell. 
+            #t_test == 209: CartPole stayed upright
+            if done or t_test == shm.HORIZON - 1: 
+                rewards.append(tot_rewards)
+                costs.append(cost)
+                epsilons.append(0) #We are doing full exploit
+                print("episode: {}/{}, pref_score: {}, cost: {}"
+                      .format(e_test, TEST_Episodes, tot_rewards, cost))
+                break;
+    return sum(rewards) / len(rewards), sum(costs) / len(costs)
+
+
+f = open(RESULT_FILE_NAME, "a")
+f.write("name, aplha, prefScore, totalCost \n")
+f.close()
+for a in alphas:
+  f = open(RESULT_FILE_NAME, "a")
+  filename = train(a)
+  prefScore, totalCost = test(filename)
+  f.write("{}, {}, {}, {} \n".format(filename, a, prefScore, totalCost))
+  f.close()
+  
+
